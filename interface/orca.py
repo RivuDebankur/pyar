@@ -1,7 +1,6 @@
 """
-mopac.py - interface to mopac program
-"""
-'''
+orca.py - interface to mopac program
+
 Copyright (C) 2016 by Surajit Nandi, Anoop Ayyappan, and Mark P. Waller
 Indian Institute of Technology Kharagpur, India and Westfaelische Wilhelms
 Universitaet Muenster, Germany
@@ -16,7 +15,7 @@ This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
-'''
+"""
 
 import os
 import subprocess as subp
@@ -40,10 +39,12 @@ class Orca(object):
         self.optimized_coordinates = []
         self.number_of_atoms = len(self.atoms_list)
         self.energy = 0.0
-        keyword="!HF opt def2-SVP"
+        keyword="!BP RI opt def2-SVP def2/J KDIIS "
+        if any(x >=21 for x in molecule.atomic_number):
+            keyword = "!BP RI opt def2-SVP def2-ECP KDIIS "
+	if any(x%2!=0 for x in molecule.atomic_number):
+            self.multiplicity = 2   
         self.prepare_input(keyword=keyword)
-
-
 
 
     def prepare_input(self,keyword=""):
@@ -72,7 +73,16 @@ class Orca(object):
         if exit_status == 0:
             f=open(self.out_file,"r")
             l=f.readlines()
-            if ("****ORCA TERMINATED NORMALLY****" in l[-2]):
+	    check_1=0
+	    check_2=0
+
+	    for j in l:
+		if "*** OPTIMIZATION RUN DONE ***" in j:
+			check_1=1
+		if "*           SCF CONVERGED AFTER" in j:
+			check_2=1
+	
+            if ("****ORCA TERMINATED NORMALLY****" in l[-2]) and check_1==1 and check_2==1:
                 self.energy = self.get_energy()
                 self.optimized_coordinates = np.loadtxt(self.inp_file[:-4]+".xyz", dtype=float, skiprows=2, usecols=(1, 2, 3))
                 self.write_xyz(self.optimized_coordinates, self.result_xyz_file)
