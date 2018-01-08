@@ -28,8 +28,14 @@ class Orca(object):
     def __init__(self, molecule, charge=0, multiplicity=1, scftype='rhf'):
         self.job_name = molecule.name
         self.charge = charge
-        self.multiplicity = multiplicity
-        self.scftype = scftype
+        if (sum(molecule.atomic_number) - self.charge) % 2 == 1 and multiplicity == 1:
+            self.multiplicity = 2
+        else:
+            self.multiplicity = multiplicity
+        if self.multiplicity % 2 == 0 and scftype is 'rhf':
+            self.scftype = 'uhf'
+        else:
+            self.scftype = scftype
         self.start_xyz_file = 'trial_' + self.job_name + '.xyz'
         self.result_xyz_file = 'result_' + self.job_name + '.xyz'
         self.inp_file = 'trial_' + self.job_name + '.inp'
@@ -39,19 +45,19 @@ class Orca(object):
         self.optimized_coordinates = []
         self.number_of_atoms = len(self.atoms_list)
         self.energy = 0.0
-        keyword="!BP RI opt def2-SVP def2/J KDIIS "
+        keyword="!BP RI opt def2-SVP def2-SVP/J KDIIS"
         if any(x >=21 for x in molecule.atomic_number):
-            keyword = "!BP RI opt def2-SVP def2-ECP KDIIS "
-	if any(x%2!=0 for x in molecule.atomic_number):
-            self.multiplicity = 2   
+            keyword += 'def2-ECP'
         self.prepare_input(keyword=keyword)
 
 
     def prepare_input(self,keyword=""):
         coords=self.start_coords
         f1=open(self.inp_file,"w")
+        if self.scftype is 'uks':
+            keyword += 'UKS'
         f1.write(keyword+"\n")
-        f1.write("*xyz "+str(self.charge)+" "+str(self.multiplicity)+"\n")
+        f1.write("*xyz {0} {1}\n".format(str(self.charge), str(self.multiplicity)))
         for i in range(self.number_of_atoms):
             f1.write(" "+"%3s  %10.7f  %10.7f %10.7f\n" % (self.atoms_list[i], coords[i][0], coords[i][1], coords[i][2]))
         f1.write("*")
@@ -73,16 +79,7 @@ class Orca(object):
         if exit_status == 0:
             f=open(self.out_file,"r")
             l=f.readlines()
-	    check_1=0
-	    check_2=0
-
-	    for j in l:
-		if "*** OPTIMIZATION RUN DONE ***" in j:
-			check_1=1
-		if "*           SCF CONVERGED AFTER" in j:
-			check_2=1
-	
-            if ("****ORCA TERMINATED NORMALLY****" in l[-2]) and check_1==1 and check_2==1:
+            if ("****ORCA TERMINATED NORMALLY****" in l[-2]):
                 self.energy = self.get_energy()
                 self.optimized_coordinates = np.loadtxt(self.inp_file[:-4]+".xyz", dtype=float, skiprows=2, usecols=(1, 2, 3))
                 self.write_xyz(self.optimized_coordinates, self.result_xyz_file)
@@ -103,12 +100,12 @@ class Orca(object):
                 l = out.readlines()
                 en_steps=[]
                 for i in range(len(l)):
-                     if "FINAL SINGLE POINT ENERGY" in l[i]:
+                    if "FINAL SINGLE POINT ENERGY" in l[i]:
                         en_steps.append( l[i])
                 en_Eh=float((en_steps[-1].strip().split())[-1])
+            return en_Eh
         except IOError:
             print("Warning: File ", self.out_file, "was not found.")
-        return en_Eh
 
     def write_xyz(self, coords, filename):
         with open(filename, 'w') as fp:

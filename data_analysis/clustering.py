@@ -1,4 +1,5 @@
 import itertools
+import collections
 import operator
 import sys
 
@@ -66,10 +67,16 @@ def choose_geometries(t_molecules):
 
     molecules_sorted = sorted(t_molecules.keys())
     #    list_of_coulomb_matrices = [t_molecules[i].sorted_coulomb_matrix for i in sorted(t_molecules.keys())]
-    list_of_fingerprints = [t_molecules[i].fingerprint for i in molecules_sorted]
+    # list_of_fingerprints = [t_molecules[i].fingerprint for i in molecules_sorted]
+    # dt = list_of_fingerprints
 
-    dt = list_of_fingerprints
+    dt = [(t_molecules[i]. energy, np.sum(t_molecules[i].fingerprint)) for i in molecules_sorted]
+
     dt = np.around(dt, decimals=5)
+
+    import pandas as pd
+    df = pd.DataFrame(dt)
+    df.to_csv('dataframe.csv')
 
     try:
         labels = generate_labels(dt)
@@ -96,8 +103,8 @@ def choose_geometries(t_molecules):
 def print_energy_table(molecules):
     e_dict = {i: molecules[i].energy for i in molecules}
     ref = min(e_dict.values())
-    for i in sorted(e_dict, key=operator.itemgetter(1), reverse=True):
-        print("      {:>15}:{:12.6f}{:12.2f}".format(i, e_dict[i], (e_dict[i] - ref) * 627.51))
+    for name, energy in sorted(e_dict.items(), key=operator.itemgetter(1), reverse=True):
+        print("      {:>15}:{:12.6f}{:12.2f}".format(name, energy, (energy - ref) * 627.51))
 
 
 def generate_labels(dt):
@@ -112,13 +119,13 @@ def generate_labels(dt):
     except:
         print('    MeanShift failed')
     try:
-        return get_labels(dt, algorithm='dbscan')
-    except:
-        print('    DBSCAN failed')
-    try:
         return get_labels(dt, algorithm='affinitypropagation')
     except:
         print('    Affinity Propagation failed')
+    try:
+        return get_labels(dt, algorithm='dbscan')
+    except:
+        print('    DBSCAN failed')
 
     return get_labels(dt, algorithm='kmeans')
 
@@ -133,6 +140,7 @@ def select_best_from_each_cluster(labels, t_molecules):
     molecules_sorted = sorted(t_molecules.keys())
     unique_labels = np.unique(labels)
     print("   The distribution of file in each cluster:", np.bincount(labels[labels >= 0]))
+    print("   The distribution of file in each cluster:", collections.Counter(labels))
 
     best_from_each_cluster = {}
     for n in unique_labels:
